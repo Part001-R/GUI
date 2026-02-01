@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"A/internal/logfile"
 	"A/internal/uidraw"
 	"fmt"
 	"strings"
@@ -10,9 +11,11 @@ import (
 
 // Данные вида.
 type DataView struct {
-	ViewName          string   // Имя вида
-	CurrentFocusInput string   // Имя поля ввода, на который установлен фокус.
-	ListInputName     []string // Список имён полей ввода.
+	ViewName          string           // Имя вида
+	CurrentFocusInput string           // Имя поля ввода, на который установлен фокус.
+	ListInputName     []string         // Список имён полей ввода.
+	ObjCounter        *DataObjCounter  // Объект счётчика
+	LogFile           *logfile.LogFile // Логгер
 }
 
 // Выход. Возвращается ошибка.
@@ -124,6 +127,64 @@ func (i *DataView) Enter(g *gocui.Gui, v *gocui.View) error {
 		outputView.Write([]byte(inputContent))
 
 	default:
+	}
+
+	return nil
+}
+
+// Обновление данных вида. Возвращается ошибка.
+//
+// Параметры:
+//
+//	g - указатель на Gui.
+func (i *DataView) Update(g *gocui.Gui) error {
+
+	// Обработка данных счёта.
+	outputView, err := g.View("outputCnt")
+	if err != nil {
+		return fmt.Errorf("не удалось получить вид вывода: <%w>", err)
+	}
+	outputView.Clear()
+	outputView.Write([]byte(fmt.Sprintf("%d", i.ObjCounter.Value)))
+
+	//
+	// Обновления индикаторов размерешения
+	//
+
+	// Если процесс работает
+	if i.ObjCounter.Status == StageRun {
+
+		// Обновление для СТАРТ
+		elStart, err := g.View(i.ObjCounter.NameEnStart)
+		if err != nil {
+			return fmt.Errorf("не удалось получить вид вывода: <%w>", err)
+		}
+		elStart.BgColor = gocui.ColorDefault
+
+		// Обновление для СТОП
+		elStop, err := g.View(i.ObjCounter.NameEnStop)
+		if err != nil {
+			return fmt.Errorf("не удалось получить вид вывода: <%w>", err)
+		}
+		elStop.BgColor = gocui.ColorGreen
+	}
+
+	// Если процесс остановлен
+	if i.ObjCounter.Status == StageStop {
+
+		// Обновление для СТАРТ
+		elStart, err := g.View(i.ObjCounter.NameEnStart)
+		if err != nil {
+			return fmt.Errorf("не удалось получить вид вывода: <%w>", err)
+		}
+		elStart.BgColor = gocui.ColorGreen
+
+		// Обновление для СТОП
+		elStop, err := g.View(i.ObjCounter.NameEnStop)
+		if err != nil {
+			return fmt.Errorf("не удалось получить вид вывода: <%w>", err)
+		}
+		elStop.BgColor = gocui.ColorDefault
 	}
 
 	return nil

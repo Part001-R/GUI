@@ -2,20 +2,41 @@ package main
 
 import (
 	"A/internal/handler"
+	"A/internal/logfile"
 	"A/internal/uidraw"
 	"fmt"
+	"log"
+	"time"
 
 	"github.com/jroimartin/gocui"
 )
+
+// Объект - счётчик тиков.
+var objCounter = handler.DataObjCounter{
+	Status: handler.StageStop,
+	Value:  0,
+	ChCmd:  make(chan int),
+}
 
 // Данные окна.
 var dataView = handler.DataView{
 	ViewName:          "main",
 	CurrentFocusInput: "input1",
 	ListInputName:     []string{"input1", "input2"},
+	ObjCounter:        &objCounter,
 }
 
 func main() {
+
+	lgrTxt, err := logfile.New("testLog.txt")
+	if err != nil {
+		log.Fatalf("Ошибка создания логгера:<%v>", err)
+	}
+	objCounter.LogFile = lgrTxt
+	dataView.LogFile = lgrTxt
+
+	// -------------------------------------------------
+
 	g, err := gocui.NewGui(gocui.OutputNormal)
 	if err != nil {
 		panic(err)
@@ -35,10 +56,14 @@ func main() {
 
 // Отрисовка главного экрана.
 func layout(g *gocui.Gui) error {
-	maxX := 150
-	maxY := 30
+
+	//
+	// -------------------------------------------
+	//
 
 	// Создание основного представления
+	maxX := 150
+	maxY := 30
 	v, err := g.SetView(dataView.ViewName, 0, 0, maxX-1, maxY-1)
 	if err != nil {
 		if err != gocui.ErrUnknownView {
@@ -48,8 +73,12 @@ func layout(g *gocui.Gui) error {
 		v.Wrap = true
 	}
 
+	//
+	// -------------------------------------------
+	//
+
 	// Кнопка - СТАРТ
-	dataDrawButton := uidraw.DrawDataButton{
+	dataButtonStart := uidraw.DrawDataButton{
 		NameSquare:  "square1",
 		ColorSquare: gocui.ColorGreen,
 		NameButton:  "button1",
@@ -57,12 +86,13 @@ func layout(g *gocui.Gui) error {
 		StartX:      2,
 		StartY:      1,
 	}
-	if err := uidraw.DrawButton(g, dataDrawButton); err != nil {
+	if err := uidraw.DrawButton(g, dataButtonStart); err != nil {
 		return fmt.Errorf("Ошибка отрисовки кнопки: <%w>", err)
 	}
+	objCounter.NameEnStart = dataButtonStart.NameSquare
 
 	// Кнопка - СТОП
-	dataDrawButton = uidraw.DrawDataButton{
+	dataButtonStop := uidraw.DrawDataButton{
 		NameSquare:  "square2",
 		ColorSquare: gocui.ColorDefault,
 		NameButton:  "button2",
@@ -70,12 +100,17 @@ func layout(g *gocui.Gui) error {
 		StartX:      2,
 		StartY:      4,
 	}
-	if err := uidraw.DrawButton(g, dataDrawButton); err != nil {
+	if err := uidraw.DrawButton(g, dataButtonStop); err != nil {
 		return fmt.Errorf("Ошибка отрисовки кнопки: <%w>", err)
 	}
+	objCounter.NameEnStop = dataButtonStop.NameSquare
+
+	//
+	// -------------------------------------------
+	//
 
 	// Поле ввода-1.
-	dataDrawInput := uidraw.DrawDataInput{
+	dataInput1 := uidraw.DrawDataInput{
 		Color:     gocui.ColorCyan,
 		NameInput: dataView.ListInputName[0],
 		NameTitle: "Данные-1",
@@ -83,12 +118,12 @@ func layout(g *gocui.Gui) error {
 		StartX:    2,
 		StartY:    9,
 	}
-	if err := uidraw.DrawInput(g, dataDrawInput); err != nil {
+	if err := uidraw.DrawInput(g, dataInput1); err != nil {
 		return fmt.Errorf("Ошибка отрисовки ввода: <%w>", err)
 	}
 
 	// Поле ввода-2.
-	dataDrawInput = uidraw.DrawDataInput{
+	dataInput2 := uidraw.DrawDataInput{
 		Color:     gocui.ColorCyan,
 		NameInput: dataView.ListInputName[1],
 		NameTitle: "Данные-2",
@@ -96,35 +131,43 @@ func layout(g *gocui.Gui) error {
 		StartX:    2,
 		StartY:    12,
 	}
-	if err := uidraw.DrawInput(g, dataDrawInput); err != nil {
+	if err := uidraw.DrawInput(g, dataInput2); err != nil {
 		return fmt.Errorf("Ошибка отрисовки ввода: <%w>", err)
 	}
 
+	//
+	// -------------------------------------------
+	//
+
 	// Поле вывода-1.
-	dataDrawOutput := uidraw.DrawDataOutput{
+	dataOutput1 := uidraw.DrawDataOutput{
 		NameOutput: "output1",
 		NameTitle:  "",
 		Len:        30,
 		StartX:     34,
 		StartY:     9,
 	}
-	if err := uidraw.DrawOutput(g, dataDrawOutput); err != nil {
+	if err := uidraw.DrawOutput(g, dataOutput1); err != nil {
 		return fmt.Errorf("Ошибка отрисовки вывода: <%w>", err)
 	}
 
 	// Поле вывода-2.
-	dataDrawOutput = uidraw.DrawDataOutput{
+	dataOutput2 := uidraw.DrawDataOutput{
 		NameOutput: "output2",
 		NameTitle:  "",
 		Len:        30,
 		StartX:     34,
 		StartY:     12,
 	}
-	if err := uidraw.DrawOutput(g, dataDrawOutput); err != nil {
+	if err := uidraw.DrawOutput(g, dataOutput2); err != nil {
 		return fmt.Errorf("Ошибка отрисовки вывода: <%w>", err)
 	}
 
-	// Пояснение к действию - 1.
+	//
+	// -------------------------------------------
+	//
+
+	// Пояснение к действию - TAB.
 	dataDrawGuide := uidraw.DrawDataGuide{
 		NameGuide: "Guide1",
 		Text:      "TAB - перевод фокуса",
@@ -136,7 +179,7 @@ func layout(g *gocui.Gui) error {
 		return fmt.Errorf("Ошибка отрисовки пояснения: <%w>", err)
 	}
 
-	// Пояснение к действию - 2.
+	// Пояснение к действию - Enter.
 	dataDrawGuide = uidraw.DrawDataGuide{
 		NameGuide: "Guide2",
 		Text:      "Enter - фиксация ввода",
@@ -146,6 +189,46 @@ func layout(g *gocui.Gui) error {
 	}
 	if err := uidraw.DrawGuide(g, dataDrawGuide); err != nil {
 		return fmt.Errorf("Ошибка отрисовки пояснения: <%w>", err)
+	}
+
+	// Пояснение к действию - СТАРТ.
+	dataDrawGuide = uidraw.DrawDataGuide{
+		NameGuide: "Guide3",
+		Text:      "Ctrl+A - СТАРТ",
+		StartX:    66,
+		StartY:    26,
+		Weight:    30,
+	}
+	if err := uidraw.DrawGuide(g, dataDrawGuide); err != nil {
+		return fmt.Errorf("Ошибка отрисовки пояснения: <%w>", err)
+	}
+
+	// Пояснение к действию - СТОП.
+	dataDrawGuide = uidraw.DrawDataGuide{
+		NameGuide: "Guide4",
+		Text:      "Ctrl+B - СТОП",
+		StartX:    98,
+		StartY:    26,
+		Weight:    30,
+	}
+	if err := uidraw.DrawGuide(g, dataDrawGuide); err != nil {
+		return fmt.Errorf("Ошибка отрисовки пояснения: <%w>", err)
+	}
+
+	//
+	// -------------------------------------------
+	//
+
+	// Поле вывода счётчика.
+	dataOutputCnt := uidraw.DrawDataOutput{
+		NameOutput: "outputCnt",
+		NameTitle:  "",
+		Len:        10,
+		StartX:     34,
+		StartY:     2,
+	}
+	if err := uidraw.DrawOutput(g, dataOutputCnt); err != nil {
+		return fmt.Errorf("Ошибка отрисовки вывода: <%w>", err)
 	}
 
 	return nil
@@ -164,12 +247,35 @@ func keybindings(g *gocui.Gui) error {
 		return fmt.Errorf("Error: Ошибка Tab: <%w>", err)
 	}
 
+	// СТАРТ.
+	if err := g.SetKeybinding("", gocui.KeyCtrlA, gocui.ModNone, objCounter.Start); err != nil {
+		return fmt.Errorf("Error: Ошибка CtrlA: <%w>", err)
+	}
+
+	// СТОП.
+	if err := g.SetKeybinding("", gocui.KeyCtrlB, gocui.ModNone, objCounter.Stop); err != nil {
+		return fmt.Errorf("Error: Ошибка CtrlB: <%w>", err)
+	}
+
 	// Enter.
 	for _, name := range dataView.ListInputName {
 		if err := g.SetKeybinding(name, gocui.KeyEnter, gocui.ModNone, dataView.Enter); err != nil {
 			return fmt.Errorf("Error: ошибка обработки нажатия Enter: <%w>, на элементе: <%s>", err, name)
 		}
 	}
+
+	// Обновление данных вида.
+	go func() {
+		for {
+			g.Update(func(g *gocui.Gui) error {
+				if err := dataView.Update(g); err != nil {
+					return fmt.Errorf("Error: ошибка обновления индикаторов: <%w>", err)
+				}
+				return nil
+			})
+			time.Sleep(100 * time.Millisecond)
+		}
+	}()
 
 	return nil
 }
